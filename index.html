@@ -2,1079 +2,269 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width,
-      initial-scale=1,
-      viewport-fit=cover">
-
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent">
-
-<title>CamTranslate Live</title>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>CamTranslate Live V4</title>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <style>
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-    margin: 0;
-    background: #000;
-    color: white;
-    font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-
-    overflow: hidden;
-}
-
-#app {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
-/* HEADER */
-
-header {
-    padding:
-        calc(env(safe-area-inset-top) + 10px)
-        14px
-        10px;
-
-    background: #151515;
-
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.title {
-    font-size: 17px;
-    font-weight: 700;
-}
-
-.status {
-    font-size: 11px;
-    opacity: .75;
-}
-
-/* CAMERA */
-
-#camera {
-    position: relative;
-    flex: 1;
-    overflow: hidden;
-    background: black;
-}
-
-video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-/* OVERLAY */
-
-#overlay {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-}
-
-/* TRANSLATION */
-
-.translation {
-    position: absolute;
-
-    left: 50%;
-    top: 48%;
-
-    transform:
-        translate(-50%, -100%);
-
-    padding: 6px 12px;
-
-    border: 2px solid #00e676;
-
-    border-radius: 10px;
-
-    background:
-        rgba(0,0,0,.78);
-
-    box-shadow:
-        0 3px 15px rgba(0,0,0,.7);
-
-    text-align: center;
-}
-
-.translation .original {
-    font-size: 11px;
-    opacity: .65;
-}
-
-.translation .result {
-    font-size: 22px;
-    font-weight: 800;
-}
-
-/* SCAN AREA */
-
-.scan {
-    position: absolute;
-
-    left: 8%;
-    right: 8%;
-
-    top: 38%;
-
-    height: 24%;
-
-    border:
-        1px solid
-        rgba(255,255,255,.65);
-
-    border-radius: 14px;
-
-    pointer-events: none;
-}
-
-.scan-text {
-    position: absolute;
-
-    top: -22px;
-    left: 0;
-
-    font-size: 11px;
-
-    opacity: .7;
-}
-
-/* CONTROLS */
-
-#controls {
-
-    padding:
-        9px
-        10px
-        calc(env(safe-area-inset-bottom) + 9px);
-
-    background: #151515;
-
-    display: flex;
-
-    gap: 7px;
-}
-
-button {
-
-    flex: 1;
-
-    padding: 12px 8px;
-
-    border: 0;
-
-    border-radius: 10px;
-
-    font-weight: 700;
-
-    font-size: 13px;
-}
-
-button.primary {
-
-    background: white;
-
-    color: black;
-}
-
-button.dark {
-
-    background: #333;
-
-    color: white;
-}
-
-/* DICTIONARY */
-
-#dictionary {
-
-    display: none;
-
-    position: absolute;
-
-    inset: 0;
-
-    z-index: 20;
-
-    background: #111;
-
-    padding:
-        calc(env(safe-area-inset-top) + 15px)
-        14px
-        calc(env(safe-area-inset-bottom) + 15px);
-
-    overflow: auto;
-}
-
-#dictionary h2 {
-
-    margin-top: 0;
-
-}
-
-.input-row {
-
-    display: flex;
-
-    gap: 6px;
-
-}
-
-.input-row input {
-
-    min-width: 0;
-
-    flex: 1;
-
-    background: #222;
-
-    color: white;
-
-    border: 1px solid #555;
-
-    border-radius: 8px;
-
-    padding: 10px;
-
-}
-
-.dictionary-item {
-
-    background: #222;
-
-    margin-top: 7px;
-
-    padding: 11px;
-
-    border-radius: 8px;
-
-    display: flex;
-
-    justify-content: space-between;
-
-    align-items: center;
-
-}
-
-.delete {
-
-    flex: 0 0 auto;
-
-    padding: 7px 10px;
-
-    background: #333;
-
-    color: white;
-
-}
-
+*{box-sizing:border-box}
+body{margin:0;background:#111;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{height:88px;padding:16px 22px;background:#171717;display:flex;align-items:center;justify-content:space-between}
+.title{font-size:27px;font-weight:700}
+.status{font-size:15px;color:#ccc;max-width:55%;text-align:right}
+.camera{position:relative;width:100%;height:calc(100vh - 240px);min-height:430px;overflow:hidden;background:#000}
+video{width:100%;height:100%;object-fit:cover}
+.scanbox{position:absolute;left:7%;top:34%;width:86%;height:30%;border:2px solid rgba(255,255,255,.75);border-radius:16px;pointer-events:none}
+.hint{position:absolute;left:8%;top:31%;font-size:15px;color:#eee;text-shadow:0 1px 3px #000}
+.overlay{position:absolute;padding:5px 12px;border-radius:10px;background:#16a34a;color:white;font-size:25px;font-weight:800;white-space:nowrap;box-shadow:0 3px 12px #0008;transform:translate(-50%,-50%);display:none;pointer-events:none}
+.controls{height:152px;background:#171717;padding:18px 14px;display:flex;gap:10px;align-items:center}
+button{border:0;border-radius:14px;padding:16px 13px;font-size:17px;font-weight:700;background:#eee;color:#111;flex:1}
+button.secondary{background:#333;color:#fff}
+button:disabled{opacity:.45}
+.panel{padding:16px;background:#1b1b1b}
+.row{display:flex;gap:8px}
+input{flex:1;padding:12px;border-radius:10px;border:1px solid #555;background:#222;color:#fff;font-size:16px}
+.small{font-size:13px;color:#aaa;margin-top:8px}
+.item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333}
 </style>
 </head>
 
 <body>
+<header>
+  <div class="title">ð· CamTranslate<br>Live V4</div>
+  <div id="status" class="status">Camera not started</div>
+</header>
 
-<div id="app">
-
-    <header>
-
-        <div class="title">
-            📷 CamTranslate Live
-        </div>
-
-        <div
-            id="status"
-            class="status">
-            Ready
-        </div>
-
-    </header>
-
-
-    <div id="camera">
-
-        <video
-            id="video"
-            autoplay
-            playsinline
-            muted>
-        </video>
-
-
-        <div id="overlay"></div>
-
-
-        <div class="scan">
-
-            <div class="scan-text">
-                Point camera at text
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <div id="controls">
-
-        <button
-            id="startCamera"
-            class="primary">
-
-            Start Camera
-
-        </button>
-
-
-        <button
-            id="startOCR"
-            class="dark">
-
-            Start OCR
-
-        </button>
-
-
-        <button
-            id="openDictionary"
-            class="dark">
-
-            Dictionary
-
-        </button>
-
-    </div>
-
+<div class="camera">
+  <video id="video" autoplay playsinline muted></video>
+  <div class="hint">Point camera at text</div>
+  <div class="scanbox"></div>
+  <div id="overlay" class="overlay"></div>
+  <canvas id="canvas" style="display:none"></canvas>
 </div>
 
-
-<!-- DICTIONARY -->
-
-<div id="dictionary">
-
-    <h2>
-        Custom Dictionary
-    </h2>
-
-
-    <div class="input-row">
-
-        <input
-            id="sourceText"
-            placeholder="aaa1">
-
-        <input
-            id="translationText"
-            placeholder="apple">
-
-        <button
-            id="addButton">
-
-            Add
-
-        </button>
-
-    </div>
-
-
-    <div id="dictionaryList"></div>
-
-
-    <button
-        id="closeDictionary"
-        class="dark"
-        style="
-        width:100%;
-        margin-top:15px;">
-
-        Close
-
-    </button>
-
+<div class="controls">
+  <button id="start">Start Camera</button>
+  <button id="ocr" class="secondary" disabled>Start OCR</button>
+  <button id="dict" class="secondary">Dictionary</button>
 </div>
 
-
-<canvas
-    id="canvas"
-    style="display:none">
-</canvas>
-
+<div id="panel" class="panel" style="display:none">
+  <div class="row">
+    <input id="key" placeholder="Example: aaa1">
+    <input id="value" placeholder="Example: APPLE">
+    <button id="add" style="flex:0 0 90px">Add</button>
+  </div>
+  <div class="small">Dictionary is saved on this iPhone/browser.</div>
+  <div id="list"></div>
+</div>
 
 <script>
+const video=document.getElementById("video");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d",{willReadFrequently:true});
+const statusEl=document.getElementById("status");
+const overlay=document.getElementById("overlay");
+const startBtn=document.getElementById("start");
+const ocrBtn=document.getElementById("ocr");
+const panel=document.getElementById("panel");
+const list=document.getElementById("list");
 
-/* =========================
-   ELEMENTS
-========================= */
+let stream=null, worker=null, running=false, busy=false, lastHit="", lastHitTime=0;
+let dict=JSON.parse(localStorage.getItem("camtranslate_dict_v4")||"null")||{
+  aaa1:"APPLE",
+  aaa2:"ORANGE",
+  aaa3:"BANANA"
+};
 
-const video =
-    document.getElementById("video");
-
-const overlay =
-    document.getElementById("overlay");
-
-const status =
-    document.getElementById("status");
-
-const canvas =
-    document.getElementById("canvas");
-
-const ctx =
-    canvas.getContext("2d");
-
-
-/* =========================
-   VARIABLES
-========================= */
-
-let stream = null;
-
-let worker = null;
-
-let OCRRunning = false;
-
-let OCRBusy = false;
-
-
-/* =========================
-   CUSTOM DICTIONARY
-========================= */
-
-let dictionary =
-    JSON.parse(
-        localStorage.getItem(
-            "camtranslate_dictionary"
-        )
-    ) || {
-
-        "aaa1": "APPLE",
-
-        "aaa2": "ORANGE",
-
-        "aaa3": "BANANA"
-
-    };
-
-
-/* =========================
-   SAVE DICTIONARY
-========================= */
-
-function saveDictionary() {
-
-    localStorage.setItem(
-
-        "camtranslate_dictionary",
-
-        JSON.stringify(dictionary)
-
-    );
-
-    renderDictionary();
-
+function clean(s){
+  return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
 }
 
-
-/* =========================
-   ESCAPE HTML
-========================= */
-
-function escapeHTML(text) {
-
-    return String(text)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-
+/* OCR often turns 1 into l/I and adds spaces.
+   Make matching tolerant, but keep dictionary exact. */
+function normalizeOCR(s){
+  let x=clean(s);
+  x=x.replace(/[|il]/g,"1");
+  return x;
 }
 
-
-/* =========================
-   RENDER DICTIONARY
-========================= */
-
-function renderDictionary() {
-
-    const list =
-        document.getElementById(
-            "dictionaryList"
-        );
-
-    list.innerHTML = "";
-
-
-    Object.entries(dictionary)
-        .forEach(([source, translation]) => {
-
-            const item =
-                document.createElement("div");
-
-            item.className =
-                "dictionary-item";
-
-
-            item.innerHTML = `
-
-                <span>
-
-                    <b>
-                        ${escapeHTML(source)}
-                    </b>
-
-                    →
-
-                    ${escapeHTML(translation)}
-
-                </span>
-
-                <button
-                    class="delete">
-
-                    Delete
-
-                </button>
-
-            `;
-
-
-            item.querySelector("button")
-                .onclick = () => {
-
-                    delete dictionary[source];
-
-                    saveDictionary();
-
-                };
-
-
-            list.appendChild(item);
-
-        });
-
-}
-
-
-/* =========================
-   START CAMERA
-========================= */
-
-async function startCamera() {
-
-    try {
-
-        if (stream) {
-
-            return;
-
-        }
-
-
-        stream =
-            await navigator.mediaDevices
-                .getUserMedia({
-
-                    video: {
-
-                        facingMode: {
-                            ideal: "environment"
-                        },
-
-                        width: {
-                            ideal: 1280
-                        },
-
-                        height: {
-                            ideal: 720
-                        }
-
-                    },
-
-                    audio: false
-
-                });
-
-
-        video.srcObject =
-            stream;
-
-
-        status.textContent =
-            "Camera ON";
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        status.textContent =
-            "Camera blocked";
-
-
-        alert(
-            "Camera permission denied. " +
-            "Please allow Camera access " +
-            "for this website in Safari."
-        );
-
+function findTranslation(words){
+  const keys=Object.keys(dict);
+  for(const w of words){
+    const raw=clean(w.text);
+    const norm=normalizeOCR(w.text);
+    for(const k of keys){
+      const kk=clean(k);
+      if(raw===kk || norm===kk) return {word:w,key:k,value:dict[k]};
+      if(levenshtein(norm,kk)<=1 && kk.length>=4)
+        return {word:w,key:k,value:dict[k]};
     }
-
+  }
+  return null;
 }
 
-
-/* =========================
-   INITIALIZE OCR
-========================= */
-
-async function initializeOCR() {
-
-    if (worker) {
-
-        return;
-
+function levenshtein(a,b){
+  const m=a.length,n=b.length;
+  if(Math.abs(m-n)>1)return 99;
+  let prev=Array.from({length:n+1},(_,i)=>i);
+  for(let i=1;i<=m;i++){
+    const cur=[i];
+    for(let j=1;j<=n;j++){
+      cur[j]=Math.min(
+        cur[j-1]+1,
+        prev[j]+1,
+        prev[j-1]+(a[i-1]===b[j-1]?0:1)
+      );
     }
-
-
-    status.textContent =
-        "Loading OCR...";
-
-
-    worker =
-        await Tesseract.createWorker(
-            "eng",
-            1
-        );
-
-
-    status.textContent =
-        "OCR Ready";
-
+    prev=cur;
+  }
+  return prev[n];
 }
 
+function setStatus(t){statusEl.textContent=t}
 
-/* =========================
-   SHOW TRANSLATION
-========================= */
+startBtn.onclick=async()=>{
+  try{
+    if(stream) return;
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},
+      audio:false
+    });
+    video.srcObject=stream;
+    await video.play();
+    ocrBtn.disabled=false;
+    startBtn.textContent="Camera Ready";
+    setStatus("Camera ready â press Start OCR");
+  }catch(e){
+    setStatus("Camera error: "+e.message);
+  }
+};
 
-function showTranslation(
-    original,
-    translated
-) {
+ocrBtn.onclick=async()=>{
+  if(running){
+    running=false;
+    ocrBtn.textContent="Start OCR";
+    setStatus("OCR stopped");
+    overlay.style.display="none";
+    return;
+  }
 
-    overlay.innerHTML = "";
+  running=true;
+  ocrBtn.disabled=true;
+  setStatus("Loading OCRâ¦");
 
+  try{
+    worker=await Tesseract.createWorker("eng",1,{
+      logger:m=>{
+        if(m.status==="recognizing text")
+          setStatus("Scanningâ¦");
+      }
+    });
 
-    const box =
-        document.createElement("div");
+    await worker.setParameters({
+      tessedit_pageseg_mode:"11",
+      preserve_interword_spaces:"1",
+      user_defined_dpi:"200"
+    });
 
-    box.className =
-        "translation";
+    ocrBtn.disabled=false;
+    ocrBtn.textContent="Stop OCR";
+    setStatus("Scanningâ¦");
+    scanLoop();
+  }catch(e){
+    running=false;
+    ocrBtn.disabled=false;
+    setStatus("OCR error: "+e.message);
+  }
+};
 
+async function scanLoop(){
+  if(!running || busy)return;
+  busy=true;
 
-    box.innerHTML = `
+  try{
+    const vw=video.videoWidth, vh=video.videoHeight;
+    if(!vw||!vh){busy=false;setTimeout(scanLoop,300);return;}
 
-        <div class="original">
+    /* Capture a much larger central area.
+       This compensates for iPhone object-fit:cover. */
+    const sx=Math.round(vw*0.05);
+    const sy=Math.round(vh*0.27);
+    const sw=Math.round(vw*0.90);
+    const sh=Math.round(vh*0.46);
 
-            ${escapeHTML(original)}
+    const scale=Math.min(1.8,900/sw);
+    canvas.width=Math.round(sw*scale);
+    canvas.height=Math.round(sh*scale);
 
-        </div>
+    ctx.filter="contrast(1.25) brightness(1.08)";
+    ctx.drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+    ctx.filter="none";
 
-        <div class="result">
+    const result=await worker.recognize(canvas);
+    const words=result.data.words||[];
+    const hit=findTranslation(words);
 
-            ${escapeHTML(translated)}
+    if(hit){
+      const b=hit.word.bbox;
+      const x=(b.x0+b.x1)/2;
+      const y=(b.y0+b.y1)/2;
 
-        </div>
+      /* Convert crop coordinates back to displayed video coordinates. */
+      const px=((sx+(x/scale))/vw)*100;
+      const py=((sy+(y/scale))/vh)*100;
 
-    `;
+      overlay.textContent=hit.value;
+      overlay.style.left=px+"%";
+      overlay.style.top=py+"%";
+      overlay.style.display="block";
 
-
-    overlay.appendChild(box);
-
-}
-
-
-/* =========================
-   CLEAR TRANSLATION
-========================= */
-
-function clearTranslation() {
-
-    overlay.innerHTML = "";
-
-}
-
-
-/* =========================
-   OCR SCAN
-========================= */
-
-async function scanCamera() {
-
-    if (
-        !OCRRunning ||
-        OCRBusy ||
-        !stream
-    ) {
-
-        return;
-
+      if(hit.key!==lastHit || Date.now()-lastHitTime>1500){
+        setStatus("Detected: "+hit.key+" â "+hit.value);
+        lastHit=hit.key;
+        lastHitTime=Date.now();
+      }
+    }else{
+      overlay.style.display="none";
     }
-
-
-    OCRBusy = true;
-
-
-    try {
-
-        const width =
-            video.videoWidth;
-
-        const height =
-            video.videoHeight;
-
-
-        if (!width || !height) {
-
-            OCRBusy = false;
-
-            return;
-
-        }
-
-
-        /*
-         Reduce image size
-         for faster OCR
-        */
-
-        const targetWidth = 800;
-
-        const targetHeight =
-            Math.round(
-                targetWidth *
-                height /
-                width
-            );
-
-
-        canvas.width =
-            targetWidth;
-
-        canvas.height =
-            targetHeight;
-
-
-        ctx.drawImage(
-
-            video,
-
-            0,
-            0,
-
-            targetWidth,
-            targetHeight
-
-        );
-
-
-        const result =
-            await worker.recognize(
-                canvas
-            );
-
-
-        const detectedText =
-            (
-                result.data.text ||
-                ""
-            ).trim();
-
-
-        let found = null;
-
-
-        /*
-         Search dictionary
-        */
-
-        for (
-            const [source, translation]
-            of Object.entries(dictionary)
-        ) {
-
-            if (
-                detectedText
-                    .toLowerCase()
-                    .includes(
-                        source.toLowerCase()
-                    )
-            ) {
-
-                found = {
-
-                    source:
-                        source,
-
-                    translation:
-                        translation
-
-                };
-
-                break;
-
-            }
-
-        }
-
-
-        if (found) {
-
-            showTranslation(
-
-                found.source,
-
-                found.translation
-
-            );
-
-
-            status.textContent =
-                found.source +
-                " → " +
-                found.translation;
-
-
-        } else {
-
-            clearTranslation();
-
-
-            if (detectedText) {
-
-                status.textContent =
-                    "Detected: " +
-                    detectedText
-                        .substring(0, 30);
-
-            } else {
-
-                status.textContent =
-                    "Scanning...";
-
-            }
-
-        }
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        status.textContent =
-            "OCR error";
-
-    }
-
-
-    OCRBusy = false;
-
-
-    if (OCRRunning) {
-
-        setTimeout(
-            scanCamera,
-            800
-        );
-
-    }
-
+  }catch(e){
+    console.log(e);
+  }
+
+  busy=false;
+  if(running)setTimeout(scanLoop,250);
 }
 
-
-/* =========================
-   CAMERA BUTTON
-========================= */
-
-document
-    .getElementById("startCamera")
-    .onclick = startCamera;
-
-
-/* =========================
-   OCR BUTTON
-========================= */
-
-document
-    .getElementById("startOCR")
-    .onclick = async function () {
-
-        if (!stream) {
-
-            await startCamera();
-
-        }
-
-
-        if (!stream) {
-
-            return;
-
-        }
-
-
-        if (!OCRRunning) {
-
-            await initializeOCR();
-
-
-            OCRRunning = true;
-
-
-            this.textContent =
-                "Stop OCR";
-
-
-            scanCamera();
-
-
-        } else {
-
-            OCRRunning = false;
-
-
-            this.textContent =
-                "Start OCR";
-
-
-            clearTranslation();
-
-
-            status.textContent =
-                "Camera ON";
-
-        }
-
-    };
-
-
-/* =========================
-   OPEN DICTIONARY
-========================= */
-
-document
-    .getElementById("openDictionary")
-    .onclick = function () {
-
-        document
-            .getElementById("dictionary")
-            .style.display =
-            "block";
-
-
-        renderDictionary();
-
-    };
-
-
-/* =========================
-   CLOSE DICTIONARY
-========================= */
-
-document
-    .getElementById("closeDictionary")
-    .onclick = function () {
-
-        document
-            .getElementById("dictionary")
-            .style.display =
-            "none";
-
-    };
-
-
-/* =========================
-   ADD DICTIONARY
-========================= */
-
-document
-    .getElementById("addButton")
-    .onclick = function () {
-
-        const source =
-            document
-                .getElementById(
-                    "sourceText"
-                )
-                .value
-                .trim();
-
-
-        const translation =
-            document
-                .getElementById(
-                    "translationText"
-                )
-                .value
-                .trim();
-
-
-        if (
-            !source ||
-            !translation
-        ) {
-
-            return;
-
-        }
-
-
-        dictionary[source] =
-            translation;
-
-
-        saveDictionary();
-
-
-        document
-            .getElementById(
-                "sourceText"
-            )
-            .value = "";
-
-
-        document
-            .getElementById(
-                "translationText"
-            )
-            .value = "";
-
-    };
-
-
-/* =========================
-   INITIAL DISPLAY
-========================= */
-
-renderDictionary();
-
+document.getElementById("dict").onclick=()=>{
+  panel.style.display=panel.style.display==="none"?"block":"none";
+  renderDict();
+};
+
+document.getElementById("add").onclick=()=>{
+  const k=document.getElementById("key").value.trim();
+  const v=document.getElementById("value").value.trim();
+  if(!k||!v)return;
+  dict[k]=v;
+  localStorage.setItem("camtranslate_dict_v4",JSON.stringify(dict));
+  document.getElementById("key").value="";
+  document.getElementById("value").value="";
+  renderDict();
+};
+
+function renderDict(){
+  list.innerHTML="";
+  Object.entries(dict).forEach(([k,v])=>{
+    const d=document.createElement("div");
+    d.className="item";
+    d.innerHTML="<span>"+k+"</span><b>"+v+"</b>";
+    list.appendChild(d);
+  });
+}
+renderDict();
 </script>
-
 </body>
 </html>
