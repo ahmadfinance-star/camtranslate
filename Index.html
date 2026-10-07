@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>WBS Lens V6 - Finance Level 5</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0f0f10;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:14px 18px;background:#181819;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.title{font-size:24px;font-weight:800;line-height:1.05}.sub{font-size:12px;color:#aaa;margin-top:4px}
+.status{font-size:13px;color:#ccc;text-align:right;max-width:48%}
+.camera{position:relative;height:calc(100vh - 300px);min-height:420px;background:#000;overflow:hidden}
+video{width:100%;height:100%;object-fit:cover}
+.scanbox{position:absolute;left:4%;top:31%;width:92%;height:36%;border:2px solid rgba(255,255,255,.86);border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.04)}
+.hint{position:absolute;left:6%;top:27.5%;font-size:14px;text-shadow:0 1px 5px #000}
+.overlay{position:absolute;padding:4px 9px;border-radius:9px;background:#168b45;color:#fff;font-size:19px;font-weight:800;display:none;transform:translate(-50%,-50%);white-space:nowrap;box-shadow:0 3px 10px #0008}
+.result{position:absolute;left:4%;right:4%;bottom:12px;padding:13px 14px;border-radius:15px;background:rgba(15,15,16,.88);backdrop-filter:blur(9px)}
+.result .wbs{font-size:20px;font-weight:850;word-break:break-all}.result .desc{font-size:14px;color:#ddd;margin-top:3px}
+.valid{color:#42e36f}.warn{color:#ffd24a}.bad{color:#ff6868}
+.controls{padding:14px;background:#181819;display:flex;gap:8px}
+button{border:0;border-radius:13px;padding:14px 9px;font-size:15px;font-weight:750;flex:1}
+.primary{background:#eee;color:#111}.secondary{background:#333;color:#fff}
+button:disabled{opacity:.45}
+.panel{padding:14px;background:#1b1b1c}.panel h3{margin:0 0 9px}
+input[type=file]{width:100%;padding:10px;background:#252526;color:#fff;border-radius:10px}
+.small{font-size:12px;color:#aaa;line-height:1.4;margin-top:7px}
+.mode{display:flex;gap:8px;margin:10px 0}.mode button{padding:10px}
+.mode .selected{outline:2px solid #fff}
+table{width:100%;font-size:11px;border-collapse:collapse;margin-top:10px}
+td,th{padding:5px;border-bottom:1px solid #333;text-align:left}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="title">📷 WBS Lens V6</div>
+    <div class="sub">FINANCE • LEVEL 5 ONLY</div>
+  </div>
+  <div id="status" class="status">214 WBS loaded</div>
+</header>
+
+<div class="camera">
+  <video id="video" autoplay playsinline muted></video>
+  <div class="hint">Point camera at Finance WBS Level 5</div>
+  <div class="scanbox"></div>
+  <div id="overlay" class="overlay"></div>
+  <canvas id="canvas" style="display:none"></canvas>
+  <div id="result" class="result">
+    <div class="wbs">Ready</div>
+    <div class="desc">Only Level 5 WBS are checked.</div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="start" class="primary">Start Camera</button>
+  <button id="ocr" class="secondary" disabled>Start OCR</button>
+  <button id="master" class="secondary">Master</button>
+</div>
+
+<div id="panel" class="panel" style="display:none">
+  <h3>Finance WBS Master — Level 5</h3>
+  <div class="small"><b id="count">214 WBS loaded</b><br>This V6 already contains the Level 5 WBS extracted from your uploaded master. Optional: upload a newer Excel to replace it.</div>
+  <input id="file" type="file" accept=".xlsx,.xls,.csv" style="margin-top:9px">
+  <div class="mode">
+    <button id="fastMode" class="selected secondary">⚡ Fast</button>
+    <button id="accurateMode" class="secondary">🎯 Accurate</button>
+  </div>
+  <div class="small">Fast is recommended for live SAP checking. Accurate uses a stricter second pass when the first result is uncertain.</div>
+  <div id="preview"></div>
+</div>
+
+<script>
+const EMBEDDED_MASTER = [{"wbs":"RE/28Q01-01001-01-000-00","project":"RE/28Q01","description":"Pre Operating Expenses","long":"General Item - Pre Operating Expenses"},{"wbs":"RE/28Q01-01002-01-000-00","project":"RE/28Q01","description":"Performance Bond","long":"General Item - Performance Bond"},{"wbs":"RE/28Q01-01003-01-000-00","project":"RE/28Q01","description":"Contractor's All Risks","long":"General Item - Insurance - Contractor's All Risks"},{"wbs":"RE/28Q01-01003-02-000-00","project":"RE/28Q01","description":"Workmen's Compensation","long":"General Item - Insurance - Workmen 's Compensation"},{"wbs":"RE/28Q01-01003-03-000-00","project":"RE/28Q01","description":"Stamp Duty","long":"General Item - Insurance - Stamp Duty"},{"wbs":"RE/28Q01-01003-99-000-00","project":"RE/28Q01","description":"Insurance - Others","long":"General Item - Insurance - Others"},{"wbs":"RE/28Q01-01004-01-000-00","project":"RE/28Q01","description":"SO / RE Expenses - Staff Cost","long":"General Item - SO / RE Expenses - Staff Cost"},{"wbs":"RE/28Q01-01004-02-000-00","project":"RE/28Q01","description":"SO / RE Expenses - Vehicle Cost","long":"General Item - SO / RE Expenses - Vehicle Cost"},{"wbs":"RE/28Q01-01004-03-000-00","project":"RE/28Q01","description":"SO / RE Expenses -  Office Expenses","long":"General Item - SO / RE Expenses - Office Expenses"},{"wbs":"RE/28Q01-01004-04-000-00","project":"RE/28Q01","description":"SO / RE Expenses -  Laboratory Expenses","long":"General Item - SO / RE Expenses - Laboratory Expenses"},{"wbs":"RE/28Q01-01004-05-000-00","project":"RE/28Q01","description":"SO / RE -  Staff Quarters Expenses","long":"General Item - SO / RE Expenses - Staff Quarters Expenses"},{"wbs":"RE/28Q01-01004-06-000-00","project":"RE/28Q01","description":"SO / RE Expenses - Security Expenses","long":"General Item - SO / RE Expenses - Security Expenses"},{"wbs":"RE/28Q01-01004-07-000-00","project":"RE/28Q01","description":"SO / RE Expenses - QSHE Expenses","long":"General Item - SO / RE Expenses - QSHE Expenses"},{"wbs":"RE/28Q01-01004-08-000-00","project":"RE/28Q01","description":"SO / RE Expenses - Equipment Expenses","long":"General Item - SO / RE Expenses - Equipment Expenses"},{"wbs":"RE/28Q01-01004-99-000-00","project":"RE/28Q01","description":"SO / RE Expenses - Others","long":"General Item - SO / RE Expenses - Others"},{"wbs":"RE/28Q01-01005-01-000-00","project":"RE/28Q01","description":"GNEC Expenses - Finance Charges","long":"General Item - GNEC Expenses - Finance Charges"},{"wbs":"RE/28Q01-01005-02-000-00","project":"RE/28Q01","description":"GNEC Expenses - Staff Cost","long":"General Item - GNEC Expenses - Staff Cost"},{"wbs":"RE/28Q01-01005-03-000-00","project":"RE/28Q01","description":"GNEC Expenses - Staff Cost (Retained)","long":"General Item - GNEC Expenses - Staff Cost (Retained)"},{"wbs":"RE/28Q01-01005-04-000-00","project":"RE/28Q01","description":"GNEC Expenses -  Vehicle Cost","long":"General Item - GNEC Expenses - Vehicle Cost"},{"wbs":"RE/28Q01-01005-05-000-00","project":"RE/28Q01","description":"GNEC Expense -  Vehicle Cost (Retained)","long":"General Item - GNEC Expenses - Vehicle Cost (Retained)"},{"wbs":"RE/28Q01-01005-06-000-00","project":"RE/28Q01","description":"Office Expenses (Kuching HQ)","long":"General Item - GNEC Expenses - Office Expenses (Kuching HQ)"},{"wbs":"RE/28Q01-01005-07-000-00","project":"RE/28Q01","description":"Staff Quarters Expenses (Kuching HQ)","long":"General Item - GNEC Expenses - Staff Quarters Expenses (Kuching HQ)"},{"wbs":"RE/28Q01-01005-08-000-00","project":"RE/28Q01","description":"Office Expenses (Limbang Town Office)","long":"General Item - GNEC Expenses - Office Expenses (Limbang Town Office)"},{"wbs":"RE/28Q01-01005-09-000-00","project":"RE/28Q01","description":"Office Expenses (Base Camp)","long":"General Item - GNEC Expenses - Office Expenses (Base Camp)"},{"wbs":"RE/28Q01-01005-10-000-00","project":"RE/28Q01","description":"Staff Quarters Expenses (Base Camp)","long":"General Item - GNEC Expenses - Staff Quarters (Base Camp)"},{"wbs":"RE/28Q01-01005-11-000-00","project":"RE/28Q01","description":"GNEC Expense - CLQ Expenses (Base Camp)","long":"General Item - GNEC Expenses - CLQ Expenses (Base Camp)"},{"wbs":"RE/28Q01-01005-12-000-00","project":"RE/28Q01","description":"Store Expenses (Base Camp)","long":"General Item - GNEC Expenses - Store Expenses (Base Camp)"},{"wbs":"RE/28Q01-01005-13-000-00","project":"RE/28Q01","description":"GNEC Expenses - Security Expenses","long":"General Item - GNEC Expenses - Security Expenses"},{"wbs":"RE/28Q01-01005-14-000-00","project":"RE/28Q01","description":"GNEC Expenses - QSHE Expenses","long":"General Item - GNEC Expenses - QSHE Expenses"},{"wbs":"RE/28Q01-01005-15-000-00","project":"RE/28Q01","description":"GNEC Expenses - Survey Expenses","long":"General Item - GNEC Expenses - Survey Expenses"},{"wbs":"RE/28Q01-01005-16-000-00","project":"RE/28Q01","description":"GNEC Expenses -Temporary Works","long":"General Item - GNEC Expenses - Temporary Works"},{"wbs":"RE/28Q01-01005-99-000-00","project":"RE/28Q01","description":"GNEC Expenses - Others","long":"General Item - GNEC Expenses - Others"},{"wbs":"RE/28Q01-01080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"General Item - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-01080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"General Item - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-01080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"General Item - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-01080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Fee","long":"General Item - GNEC Self Performed - Material Handling Fee"},{"wbs":"RE/28Q01-01080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"General Item - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-01099-00-000-00","project":"RE/28Q01","description":"General Item - Others","long":"General Item - Others"},{"wbs":"RE/28Q01-2A001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Piling (Civil Works) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-2A001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Piling (Civil Works) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-2A080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Piling (Civil Works) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-2A080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Piling (Civil Works) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-2A080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Piling (Civil Works) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-2A080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Piling (Civil Works) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-2A080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Piling (Civil Works) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-2A099-00-000-00","project":"RE/28Q01","description":"Piling (Civil Works) - Others","long":"Piling (Civil Works) - Others"},{"wbs":"RE/28Q01-2B001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Piling (Flyover) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-2B001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Piling (Flyover) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-2B080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Piling (Flyover) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-2B080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Piling (Flyover) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-2B080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Piling (Flyover) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-2B080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Piling (Flyover) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-2B080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Piling (Flyover) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-2B099-00-000-00","project":"RE/28Q01","description":"Piling (Flyover) - Others","long":"Piling (Flyover) - Others"},{"wbs":"RE/28Q01-2C001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Piling (Bridge Works) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-2C001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Piling (Bridge Works) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-2C080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Piling (Bridge Works) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-2C080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Piling (Bridge Works) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-2C080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Piling (Bridge Works) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-2C080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Piling (Bridge Works) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-2C080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Piling (Bridge Works) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-2C099-00-000-00","project":"RE/28Q01","description":"Piling (Bridge Works) - Others","long":"Piling (Bridge Works) - Others"},{"wbs":"RE/28Q01-2D001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Piling (URW) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-2D001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Piling (URW) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-2D080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Piling (URW) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-2D080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Piling (URW) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-2D080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Piling (URW) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-2D080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Piling (URW) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-2D080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Piling (URW) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-2D099-00-000-00","project":"RE/28Q01","description":"Piling (URW) - Others","long":"Piling (URW) - Others"},{"wbs":"RE/28Q01-3A001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Civil Works (Earthworks) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-3A001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Civil Works (Earthworks) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-3A080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Civil Works (Earthworks) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-3A080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Civil Works (Earthworks) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-3A080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Civil Works (Earthworks) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-3A080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Civil Works (Earthworks) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-3A080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Civil Works (Earthworks) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-3A099-00-000-00","project":"RE/28Q01","description":"Civil Works (Earthworks) - Others","long":"Civil Works (Earthworks) - Others"},{"wbs":"RE/28Q01-3B001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Civil Works (Geotechnical Works) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-3B001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Civil Works (Geotechnical Works) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-3B080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Civil Works (Geotechnical Works) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-3B080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Civil Works (Geotechnical Works) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-3B080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Civil Works (Geotechnical Works) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-3B080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Civil Works (Geotechnical Works) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-3B080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Civil Works (Geotechnical Works) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-3B099-00-000-00","project":"RE/28Q01","description":"Civil Work (Geotechnical Work) - Others","long":"Civil Works (Geotechnical Works) - Others"},{"wbs":"RE/28Q01-3C001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Civil Works (Drainage Works) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-3C001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Civil Works (Drainage Works) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-3C080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Civil Works (Drainage Works) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-3C080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Civil Works (Drainage Works) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-3C080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Civil Works (Drainage Works) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-3C080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Civil Works (Drainage Works) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-3C080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Civil Works (Drainage Works) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-3C099-00-000-00","project":"RE/28Q01","description":"Civil Works (Drainage Works) - Others","long":"Civil Works (Drainage Works) - Others"},{"wbs":"RE/28Q01-3D001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Civil Works (Roads and Pavings Works) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-3D001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Civil Works (Roads and Pavings Works) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-3D080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Civil Works (Roads and Pavings Works) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-3D080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Civil Works (Roads and Pavings Works) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-3D080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Civil Works (Roads and Pavings Works) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-3D080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Civil Works (Roads and Pavings Works) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-3D080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Civil Works (Roads and Pavings Works) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-3D099-00-000-00","project":"RE/28Q01","description":"Civil Works (Roads and Pavings) - Others","long":"Civil Works (Roads and Pavings Works) - Others"},{"wbs":"RE/28Q01-3E001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Civil Works (Road Furniture) - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-3E001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Civil Works (Road Furniture) - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-3E080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Civil Works (Road Furniture) - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-3E080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Civil Works (Road Furniture) - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-3E080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Civil Works (Road Furniture) - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-3E080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Civil Works (Road Furniture) - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-3E080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Civil Works (Road Furniture) - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-3E099-00-000-00","project":"RE/28Q01","description":"Civil Works (Road Furniture) - Others","long":"Civil Works (Road Furniture) - Others"},{"wbs":"RE/28Q01-4A001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Flyover 1 - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-4A001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Flyover 1 - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-4A080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Flyover 1 - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-4A080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Flyover 1 - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-4A080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Flyover 1 - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-4A080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Flyover 1 - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-4A080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Flyover 1 - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-4A099-00-000-00","project":"RE/28Q01","description":"Flyover 1 - Others","long":"Flyover 1 - Others"},{"wbs":"RE/28Q01-5A001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Sg. Limbang 1 - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-5A001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Sg. Limbang 1 - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-5A080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Sg. Limbang 1 - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-5A080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Sg. Limbang 1 - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-5A080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Sg. Limbang 1 - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-5A080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Sg. Limbang 1 - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-5A080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Sg. Limbang 1 - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-5A099-00-000-00","project":"RE/28Q01","description":"Sg. Limbang 1 - Others","long":"Sg. Limbang 1 - Others"},{"wbs":"RE/28Q01-5B001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Sg. Merasam - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-5B001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Sg. Merasam - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-5B080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Sg. Merasam - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-5B080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Sg. Merasam - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-5B080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Sg. Merasam - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-5B080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Sg. Merasam - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-5B080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Sg. Merasam - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-5B099-00-000-00","project":"RE/28Q01","description":"Sg. Merasam - Others","long":"Sg. Merasam - Others"},{"wbs":"RE/28Q01-5C001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Sg. Meritam - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-5C001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Sg. Meritam - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-5C080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Sg. Meritam - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-5C080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Sg. Meritam - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-5C080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Sg. Meritam - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-5C080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Sg. Meritam - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-5C080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Sg. Meritam - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-5C099-00-000-00","project":"RE/28Q01","description":"Sg. Meritam - Others","long":"Sg. Meritam - Others"},{"wbs":"RE/28Q01-5D001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Sg. Limbang 2 - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-5D001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Sg. Limbang 2 - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-5D080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Sg. Limbang 2 - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-5D080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Sg. Limbang 2 - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-5D080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Sg. Limbang 2 - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-5D080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Sg. Limbang 2 - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-5D080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Sg. Limbang 2 - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-5D099-00-000-00","project":"RE/28Q01","description":"Sg. Limbang 2 - Others","long":"Sg. Limbang 2 - Others"},{"wbs":"RE/28Q01-06001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Environmental Protection and Enhancement - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-06001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Environmental Protection and Enhancement - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-06080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Environmental Protection and Enhancement - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-06080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Environmental Protection and Enhancement - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-06080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Environmental Protection and Enhancement - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-06080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Environmental Protection and Enhancement - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-06080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Environmental Protection and Enhancement - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-06099-00-000-00","project":"RE/28Q01","description":"Environmental - Others","long":"Environmental Protection and Enhancement - Others"},{"wbs":"RE/28Q01-07001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Environmental Protection and Enhancement - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-07001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Environmental Protection and Enhancement - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-07080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Environmental Protection and Enhancement - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-07080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Environmental Protection and Enhancement - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-07080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Environmental Protection and Enhancement - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-07080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Environmental Protection and Enhancement - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-07080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Environmental Protection and Enhancement - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-07099-00-000-00","project":"RE/28Q01","description":"Traffic Management and Control - Others","long":"Environmental Protection and Enhancement - Others"},{"wbs":"RE/28Q01-8A001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Bus Shelters - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-8A001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Bus Shelters - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-8A080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Bus Shelters - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-8A080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Bus Shelters - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-8A080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Bus Shelters - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-8A080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Bus Shelters - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-8A080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Bus Shelters - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-8A099-00-000-00","project":"RE/28Q01","description":"Bus Shelters - Others","long":"Bus Shelters - Others"},{"wbs":"RE/28Q01-9A001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Routine Maintenance During Construction  - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-9A001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Routine Maintenance During Construction  - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-9A080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Routine Maintenance During Construction  - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-9A080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Routine Maintenance During Construction  - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-9A080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Routine Maintenance During Construction  - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-9A080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Routine Maintenance During Construction  - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-9A080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Routine Maintenance During Construction  - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-9A099-00-000-00","project":"RE/28Q01","description":"Routine Maintenance (Construct) - Other","long":"Routine Maintenance During Construction  - Others"},{"wbs":"RE/28Q01-9B001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Routine Maintenance During Defects Liability Period - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-9B001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Routine Maintenance During Defects Liability Period - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-9B080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Routine Maintenance During Defects Liability Period - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-9B080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Routine Maintenance During Defects Liability Period - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-9B080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Routine Maintenance During Defects Liability Period - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-9B080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Routine Maintenance During Defects Liability Period - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-9B080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Routine Maintenance During Defects Liability Period - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-9B099-00-000-00","project":"RE/28Q01","description":"Routine Maintenance (DLP)- Others","long":"Routine Maintenance During Defects Liability Period - Others"},{"wbs":"RE/28Q01-10001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Mechanical and Electrical (M&E) : New Infrastructure Works - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-10001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Mechanical and Electrical (M&E) : New Infrastructure Works - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-10080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Mechanical and Electrical (M&E) : New Infrastructure Works - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-10080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Mechanical and Electrical (M&E) : New Infrastructure Works - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-10080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Mechanical and Electrical (M&E) : New Infrastructure Works - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-10080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Mechanical and Electrical (M&E) : New Infrastructure Works - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-10080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Mechanical and Electrical (M&E) : New Infrastructure Works - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-10099-00-000-00","project":"RE/28Q01","description":"M&E : New Infrastructure Works - Others","long":"Mechanical and Electrical (M&E) : New Infrastructure Works - Others"},{"wbs":"RE/28Q01-11001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Mechanical and Electrical (M&E) : Utilities Relocation Works - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-11001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Mechanical and Electrical (M&E) : Utilities Relocation Works - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-11080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Mechanical and Electrical (M&E) : Utilities Relocation Works - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-11080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Mechanical and Electrical (M&E) : Utilities Relocation Works - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-11080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Mechanical and Electrical (M&E) : Utilities Relocation Works - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-11080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Mechanical and Electrical (M&E) : Utilities Relocation Works - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-11080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Mechanical and Electrical (M&E) : Utilities Relocation Works - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-11099-00-000-00","project":"RE/28Q01","description":"M&E : Utilities Relocation Work - Others","long":"Mechanical and Electrical (M&E) : Utilities Relocation Works - Others"},{"wbs":"RE/28Q01-12001-GP-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Preliminaries","long":"Utilities Relocation Works (URW) for Water Works - Sub-Contractor Cost - Preliminaries"},{"wbs":"RE/28Q01-12001-CW-000-00","project":"RE/28Q01","description":"Sub-Contractor Cost - Works","long":"Utilities Relocation Works (URW) for Water Works - Sub-Contractor Cost - Works"},{"wbs":"RE/28Q01-12080-IN-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Internal Plant","long":"Utilities Relocation Works (URW) for Water Works - GNEC Self Performed - Internal Plant"},{"wbs":"RE/28Q01-12080-EX-000-00","project":"RE/28Q01","description":"GNEC Self Performed - External Plant","long":"Utilities Relocation Works (URW) for Water Works - GNEC Self Performed - External Plant"},{"wbs":"RE/28Q01-12080-MC-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Material Cost","long":"Utilities Relocation Works (URW) for Water Works - GNEC Self Performed - Material Cost"},{"wbs":"RE/28Q01-12080-MH-000-00","project":"RE/28Q01","description":"GNEC - Material Handling Cost","long":"Utilities Relocation Works (URW) for Water Works - GNEC - Material Handling Cost"},{"wbs":"RE/28Q01-12080-OH-000-00","project":"RE/28Q01","description":"GNEC Self Performed - Overhead","long":"Utilities Relocation Works (URW) for Water Works - GNEC Self Performed - Overhead"},{"wbs":"RE/28Q01-12099-00-000-00","project":"RE/28Q01","description":"(URW) for Water Works - Others","long":"Utilities Relocation Works (URW) for Water Works - Others"}];
+
+const video=document.getElementById("video");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d",{willReadFrequently:true});
+const statusEl=document.getElementById("status");
+const overlay=document.getElementById("overlay");
+const result=document.getElementById("result");
+const startBtn=document.getElementById("start");
+const ocrBtn=document.getElementById("ocr");
+const panel=document.getElementById("panel");
+
+let master=JSON.parse(localStorage.getItem("wbs_master_v6")||"null");
+if(!Array.isArray(master)||!master.length) master=EMBEDDED_MASTER;
+
+let stream=null,worker=null,running=false,busy=false,mode="fast";
+let lastWbs="",lastTime=0;
+
+const EXACT_MAP=new Map(master.map(r=>[norm(r.wbs),r]));
+
+function clean(s){
+  return String(s||"").toUpperCase()
+    .replace(/[—–−]/g,"-")
+    .replace(/\s+/g,"")
+    .replace(/[^A-Z0-9./_-]/g,"");
+}
+function norm(s){
+  return clean(s)
+    .replace(/O/g,"0").replace(/Q/g,"0")
+    .replace(/[IL|]/g,"1")
+    .replace(/Z/g,"2");
+}
+function lev(a,b){
+  const m=a.length,n=b.length;
+  if(Math.abs(m-n)>3)return 99;
+  let p=Array.from({length:n+1},(_,i)=>i);
+  for(let i=1;i<=m;i++){
+    const c=[i];
+    for(let j=1;j<=n;j++) c[j]=Math.min(c[j-1]+1,p[j]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));
+    p=c;
+  }
+  return p[n];
+}
+function score(a,b){
+  a=norm(a);b=norm(b);
+  const d=lev(a,b);
+  return d>10?0:1-d/Math.max(a.length,b.length);
+}
+
+/* WBS structure for this Finance master:
+   RE/28Q01-XXXXX-XX-XXX-XX = 24 chars */
+function looksLikeFinanceWBS(s){
+  const x=clean(s);
+  return /^RE\/28Q01-\d{5}-\d{2}-\d{3}-\d{2}$/.test(x);
+}
+
+function candidates(words){
+  const out=[];
+  for(const w of words){
+    const t=clean(w.text);
+    if(t.length>=8) out.push({text:t,bbox:w.bbox});
+  }
+  // Join nearby OCR tokens because Tesseract may split WBS at separators.
+  for(let i=0;i<words.length;i++){
+    for(let j=i+1;j<Math.min(i+5,words.length);j++){
+      const a=clean(words[i].text),b=clean(words[j].text);
+      if(!a||!b)continue;
+      const joined=a+b;
+      if(joined.length>=12) out.push({
+        text:joined,
+        bbox:{
+          x0:Math.min(words[i].bbox.x0,words[j].bbox.x0),
+          y0:Math.min(words[i].bbox.y0,words[j].bbox.y0),
+          x1:Math.max(words[i].bbox.x1,words[j].bbox.x1),
+          y1:Math.max(words[i].bbox.y1,words[j].bbox.y1)
+        }
+      });
+    }
+  }
+  return out;
+}
+
+function findExact(words){
+  for(const c of candidates(words)){
+    const r=EXACT_MAP.get(norm(c.text));
+    if(r)return {row:r,candidate:c,exact:true,confidence:1};
+  }
+  return null;
+}
+
+function findClosest(words){
+  let best=null;
+  for(const c of candidates(words)){
+    const cn=norm(c.text);
+    // Strong guard against matching random text.
+    if(cn.length<20 || cn.length>28)continue;
+    for(const r of master){
+      const target=norm(r.wbs);
+      if(Math.abs(cn.length-target.length)>2)continue;
+      const s=score(cn,target);
+      if(!best||s>best.confidence)best={row:r,candidate:c,exact:false,confidence:s};
+    }
+  }
+  return best&&best.confidence>=0.875?best:null;
+}
+
+function renderHit(hit){
+  if(!hit){
+    result.innerHTML='<div class="wbs">No Level 5 WBS match</div><div class="desc">Keep the WBS inside the scan box.</div>';
+    overlay.style.display="none";
+    return;
+  }
+  const r=hit.row;
+  if(hit.exact){
+    result.innerHTML=`<div class="wbs valid">🟢 ${r.wbs} ✓</div>
+      <div class="desc">${esc(r.description)}${r.project?" • "+esc(r.project):""}</div>
+      <div class="small">Exact Finance Level 5 match.</div>`;
+  }else{
+    result.innerHTML=`<div class="wbs warn">🟡 ${r.wbs}</div>
+      <div class="desc">${esc(r.description)}</div>
+      <div class="small">Possible OCR error. Verify before using in SAP.</div>`;
+  }
+}
+function esc(s){
+  return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+}
+
+startBtn.onclick=async()=>{
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false
+    });
+    video.srcObject=stream; await video.play();
+    ocrBtn.disabled=false;startBtn.textContent="Camera Ready";
+    statusEl.textContent=`${master.length} Level 5 WBS`;
+  }catch(e){statusEl.textContent="Camera error: "+e.message}
+};
+
+ocrBtn.onclick=async()=>{
+  if(running){
+    running=false;ocrBtn.textContent="Start OCR";statusEl.textContent="OCR stopped";
+    overlay.style.display="none";return;
+  }
+  running=true;ocrBtn.disabled=true;statusEl.textContent="Loading OCR…";
+  try{
+    worker=await Tesseract.createWorker("eng",1,{logger:m=>{
+      if(m.status==="recognizing text")statusEl.textContent="Scanning Level 5…";
+    }});
+    await configureWorker();
+    ocrBtn.disabled=false;ocrBtn.textContent="Stop OCR";scanLoop();
+  }catch(e){
+    running=false;ocrBtn.disabled=false;statusEl.textContent="OCR error: "+e.message;
+  }
+};
+
+async function configureWorker(){
+  await worker.setParameters({
+    tessedit_pageseg_mode:"11",
+    tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./_-",
+    preserve_interword_spaces:"1",
+    user_defined_dpi:"200"
+  });
+}
+
+async function scanLoop(){
+  if(!running||busy)return;
+  busy=true;
+  try{
+    const vw=video.videoWidth,vh=video.videoHeight;
+    if(!vw||!vh){busy=false;setTimeout(scanLoop,180);return;}
+
+    // Large enough to catch WBS, but much smaller than full frame.
+    const sx=Math.round(vw*.035),sy=Math.round(vh*.24);
+    const sw=Math.round(vw*.93),sh=Math.round(vh*.52);
+    const scale=Math.min(2.0,1100/sw);
+
+    canvas.width=Math.round(sw*scale);
+    canvas.height=Math.round(sh*scale);
+
+    ctx.filter="grayscale(1) contrast(1.45) brightness(1.05)";
+    ctx.drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+    ctx.filter="none";
+
+    let ocr=await worker.recognize(canvas);
+    let hit=findExact(ocr.data.words||[]);
+
+    // Accurate mode: if exact match fails, do a second recognition pass
+    // using a tighter page segmentation setting.
+    if(!hit && mode==="accurate"){
+      await worker.setParameters({tessedit_pageseg_mode:"6"});
+      ocr=await worker.recognize(canvas);
+      hit=findExact(ocr.data.words||[]);
+      await worker.setParameters({tessedit_pageseg_mode:"11"});
+    }
+
+    if(!hit) hit=findClosest(ocr.data.words||[]);
+    renderHit(hit);
+
+    if(hit){
+      const b=hit.candidate.bbox;
+      const x=sx+(b.x0+b.x1)/2/scale;
+      const y=sy+(b.y0+b.y1)/2/scale;
+      overlay.textContent=hit.row.wbs;
+      overlay.style.left=(x/vw*100)+"%";
+      overlay.style.top=(y/vh*100)+"%";
+      overlay.style.display="block";
+
+      if(hit.row.wbs!==lastWbs||Date.now()-lastTime>1800){
+        statusEl.textContent=(hit.exact?"🟢 VALID: ":"🟡 CHECK: ")+hit.row.wbs;
+        lastWbs=hit.row.wbs;lastTime=Date.now();
+      }
+    }else overlay.style.display="none";
+  }catch(e){console.log(e)}
+  busy=false;
+  if(running)setTimeout(scanLoop,mode==="fast"?220:320);
+}
+
+document.getElementById("master").onclick=()=>{
+  panel.style.display=panel.style.display==="none"?"block":"none";
+  renderMaster();
+};
+document.getElementById("fastMode").onclick=async()=>{
+  mode="fast";
+  document.getElementById("fastMode").classList.add("selected");
+  document.getElementById("accurateMode").classList.remove("selected");
+  if(worker)await worker.setParameters({tessedit_pageseg_mode:"11"});
+};
+document.getElementById("accurateMode").onclick=async()=>{
+  mode="accurate";
+  document.getElementById("accurateMode").classList.add("selected");
+  document.getElementById("fastMode").classList.remove("selected");
+};
+
+document.getElementById("file").onchange=async e=>{
+  const file=e.target.files[0];if(!file)return;
+  const buf=await file.arrayBuffer();let rows=[];
+  if(file.name.toLowerCase().endsWith(".csv")){
+    rows=new TextDecoder().decode(buf).split(/\r?\n/).map(x=>x.split(","));
+  }else{
+    const wb=XLSX.read(buf,{type:"array"});
+    rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
+  }
+  importExcel(rows);
+};
+
+function importExcel(rows){
+  if(!rows.length)return;
+  const h=rows[0].map(x=>String(x).toLowerCase());
+  const wbsIdx=h.findIndex(x=>x.includes("wbs code"));
+  const levelIdx=h.findIndex(x=>x==="level");
+  const descIdx=h.findIndex(x=>x.includes("short description"));
+  const projectIdx=h.findIndex(x=>x.includes("project definition"));
+  const start=(wbsIdx>=0||levelIdx>=0)?1:0;
+  const out=[];
+  for(let i=start;i<rows.length;i++){
+    const level=levelIdx>=0?String(rows[i][levelIdx]).trim():"5";
+    const wbs=String(rows[i][wbsIdx>=0?wbsIdx:0]||"").trim();
+    if(level!=="5"||!wbs)continue;
+    out.push({
+      wbs,
+      project:projectIdx>=0?String(rows[i][projectIdx]||"").trim():"",
+      description:descIdx>=0?String(rows[i][descIdx]||"").trim():""
+    });
+  }
+  if(out.length){
+    master=out;
+    localStorage.setItem("wbs_master_v6",JSON.stringify(master));
+    statusEl.textContent=`${master.length} Level 5 WBS`;
+    location.reload();
+  }else alert("No Level 5 WBS found in this file.");
+}
+
+function renderMaster(){
+  document.getElementById("count").textContent=`${master.length} Level 5 WBS loaded`;
+  const p=document.getElementById("preview");p.innerHTML="";
+  const t=document.createElement("table");
+  t.innerHTML="<tr><th>WBS Level 5</th><th>Description</th></tr>";
+  master.slice(0,15).forEach(r=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(r.wbs)}</td><td>${esc(r.description)}</td>`;
+    t.appendChild(tr);
+  });
+  p.appendChild(t);
+}
+renderMaster();
+</script>
+</body>
+</html>
