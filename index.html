@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>WBS Lens V7 - Finance Level 5</title>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0d0e10;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:14px 17px;background:#171819;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.title{font-size:24px;font-weight:850;line-height:1.05}.sub{font-size:11px;color:#aaa;margin-top:4px}
+.status{font-size:13px;color:#ccc;text-align:right;max-width:48%}
+.camera{position:relative;height:calc(100vh - 305px);min-height:430px;background:#000;overflow:hidden}
+video{width:100%;height:100%;object-fit:cover}
+.scanline{position:absolute;left:4%;right:4%;top:43%;height:76px;border:2px solid rgba(255,255,255,.92);border-radius:13px;box-shadow:0 0 0 9999px rgba(0,0,0,.10)}
+.scanline:before{content:"";position:absolute;left:8px;right:8px;top:50%;border-top:2px solid rgba(0,255,120,.55)}
+.hint{position:absolute;left:6%;top:39%;font-size:13px;text-shadow:0 1px 5px #000}
+.overlay{position:absolute;padding:4px 8px;border-radius:9px;background:#159447;color:#fff;font-size:18px;font-weight:850;display:none;transform:translate(-50%,-50%);white-space:nowrap;box-shadow:0 3px 10px #0009}
+.result{position:absolute;left:4%;right:4%;bottom:10px;padding:12px 14px;border-radius:15px;background:rgba(13,14,16,.90);backdrop-filter:blur(9px)}
+.wbs{font-size:19px;font-weight:850;word-break:break-all}.desc{font-size:13px;color:#ddd;margin-top:3px}
+.valid{color:#42ed77}.warn{color:#ffd34f}.bad{color:#ff6a6a}
+.controls{padding:13px;background:#171819;display:flex;gap:8px}
+button{border:0;border-radius:13px;padding:13px 8px;font-size:15px;font-weight:760;flex:1}
+.primary{background:#eee;color:#111}.secondary{background:#333;color:#fff}
+button:disabled{opacity:.45}
+.panel{padding:14px;background:#1a1b1c}.panel h3{margin:0 0 8px}
+.mode{display:flex;gap:8px;margin:10px 0}.mode button{padding:10px}.selected{outline:2px solid #fff}
+input[type=file]{width:100%;padding:9px;border-radius:9px;background:#242526;color:#fff}
+.small{font-size:12px;color:#aaa;line-height:1.4;margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px}
+td,th{padding:5px;border-bottom:1px solid #333;text-align:left}
+</style>
+</head>
+
+<body>
+<header>
+  <div>
+    <div class="title">📷 WBS Lens V7</div>
+    <div class="sub">FINANCE • LEVEL 5 • MULTI-PASS OCR</div>
+  </div>
+  <div id="status" class="status">Loading Master…</div>
+</header>
+
+<div class="camera">
+  <video id="video" autoplay playsinline muted></video>
+  <div class="hint">Align WBS in the scan line</div>
+  <div class="scanline"></div>
+  <div id="overlay" class="overlay"></div>
+  <canvas id="canvas" style="display:none"></canvas>
+  <div id="result" class="result">
+    <div class="wbs">Ready</div>
+    <div class="desc">Only Finance Level 5 WBS are validated.</div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="start" class="primary">Start Camera</button>
+  <button id="ocr" class="secondary" disabled>Start OCR</button>
+  <button id="masterBtn" class="secondary">Master</button>
+</div>
+
+<div id="panel" class="panel" style="display:none">
+  <h3>Finance WBS Master — Level 5</h3>
+  <div id="count" class="small"></div>
+  <div class="mode">
+    <button id="fast" class="secondary selected">⚡ Fast</button>
+    <button id="accurate" class="secondary">🎯 Accurate</button>
+  </div>
+  <div class="small">
+    Fast = live scanning. Accurate = multi-pass OCR when the first pass is uncertain.
+    A low-confidence result is never shown as VALID.
+  </div>
+  <input id="file" type="file" accept=".xlsx,.xls,.csv" style="margin-top:9px">
+  <div id="preview"></div>
+</div>
+
+<script>
+const EMBEDDED_MASTER=[{"wbs":"RE/28Q01-01001-01-000-00","description":"Pre Operating Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01002-01-000-00","description":"Performance Bond","project":"RE/28Q01"},{"wbs":"RE/28Q01-01003-01-000-00","description":"Contractor's All Risks","project":"RE/28Q01"},{"wbs":"RE/28Q01-01003-02-000-00","description":"Workmen's Compensation","project":"RE/28Q01"},{"wbs":"RE/28Q01-01003-03-000-00","description":"Stamp Duty","project":"RE/28Q01"},{"wbs":"RE/28Q01-01003-99-000-00","description":"Insurance - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-01-000-00","description":"SO / RE Expenses - Staff Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-02-000-00","description":"SO / RE Expenses - Vehicle Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-03-000-00","description":"SO / RE Expenses -  Office Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-04-000-00","description":"SO / RE Expenses -  Laboratory Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-05-000-00","description":"SO / RE -  Staff Quarters Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-06-000-00","description":"SO / RE Expenses - Security Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-07-000-00","description":"SO / RE Expenses - QSHE Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-08-000-00","description":"SO / RE Expenses - Equipment Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01004-99-000-00","description":"SO / RE Expenses - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-01-000-00","description":"GNEC Expenses - Finance Charges","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-02-000-00","description":"GNEC Expenses - Staff Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-03-000-00","description":"GNEC Expenses - Staff Cost (Retained)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-04-000-00","description":"GNEC Expenses -  Vehicle Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-05-000-00","description":"GNEC Expense -  Vehicle Cost (Retained)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-06-000-00","description":"Office Expenses (Kuching HQ)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-07-000-00","description":"Staff Quarters Expenses (Kuching HQ)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-08-000-00","description":"Office Expenses (Limbang Town Office)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-09-000-00","description":"Office Expenses (Base Camp)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-10-000-00","description":"Staff Quarters Expenses (Base Camp)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-11-000-00","description":"GNEC Expense - CLQ Expenses (Base Camp)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-12-000-00","description":"Store Expenses (Base Camp)","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-13-000-00","description":"GNEC Expenses - Security Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-14-000-00","description":"GNEC Expenses - QSHE Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-15-000-00","description":"GNEC Expenses - Survey Expenses","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-16-000-00","description":"GNEC Expenses -Temporary Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-01005-99-000-00","description":"GNEC Expenses - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-01080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-01080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-01080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-01080-MH-000-00","description":"GNEC - Material Handling Fee","project":"RE/28Q01"},{"wbs":"RE/28Q01-01080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-01099-00-000-00","description":"General Item - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-2A001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-2A001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-2A080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-2A080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-2A080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-2A080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-2A080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-2A099-00-000-00","description":"Piling (Civil Works) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-2B001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-2B001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-2B080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-2B080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-2B080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-2B080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-2B080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-2B099-00-000-00","description":"Piling (Flyover) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-2C001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-2C001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-2C080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-2C080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-2C080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-2C080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-2C080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-2C099-00-000-00","description":"Piling (Bridge Works) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-2D001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-2D001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-2D080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-2D080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-2D080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-2D080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-2D080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-2D099-00-000-00","description":"Piling (URW) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-3A001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-3A001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-3A080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3A080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3A080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3A080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3A080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-3A099-00-000-00","description":"Civil Works (Earthworks) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-3B001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-3B001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-3B080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3B080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3B080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3B080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3B080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-3B099-00-000-00","description":"Civil Work (Geotechnical Work) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-3C001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-3C001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-3C080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3C080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3C080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3C080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3C080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-3C099-00-000-00","description":"Civil Works (Drainage Works) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-3D001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-3D001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-3D080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3D080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3D080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3D080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3D080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-3D099-00-000-00","description":"Civil Works (Roads and Pavings) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-3E001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-3E001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-3E080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3E080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-3E080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3E080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-3E080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-3E099-00-000-00","description":"Civil Works (Road Furniture) - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-4A001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-4A001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-4A080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-4A080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-4A080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-4A080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-4A080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-4A099-00-000-00","description":"Flyover 1 - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-5A001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-5A001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-5A080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-5A080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-5A080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-5A080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-5A080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-5A099-00-000-00","description":"Sg. Limbang 1 - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-5B001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-5B001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-5B080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-5B080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-5B080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-5B080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-5B080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-5B099-00-000-00","description":"Sg. Merasam - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-5C001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-5C001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-5C080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-5C080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-5C080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-5C080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-5C080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-5C099-00-000-00","description":"Sg. Meritam - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-5D001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-5D001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-5D080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-5D080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-5D080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-5D080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-5D080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-5D099-00-000-00","description":"Sg. Limbang 2 - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-06001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-06001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-06080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-06080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-06080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-06080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-06080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-06099-00-000-00","description":"Environmental - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-07001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-07001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-07080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-07080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-07080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-07080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-07080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-07099-00-000-00","description":"Traffic Management and Control - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-8A001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-8A001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-8A080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-8A080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-8A080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-8A080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-8A080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-8A099-00-000-00","description":"Bus Shelters - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-9A001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-9A001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-9A080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-9A080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-9A080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-9A080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-9A080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-9A099-00-000-00","description":"Routine Maintenance (Construct) - Other","project":"RE/28Q01"},{"wbs":"RE/28Q01-9B001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-9B001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-9B080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-9B080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-9B080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-9B080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-9B080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-9B099-00-000-00","description":"Routine Maintenance (DLP)- Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-10001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-10001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-10080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-10080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-10080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-10080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-10080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-10099-00-000-00","description":"M&E : New Infrastructure Works - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-11001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-11001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-11080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-11080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-11080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-11080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-11080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-11099-00-000-00","description":"M&E : Utilities Relocation Work - Others","project":"RE/28Q01"},{"wbs":"RE/28Q01-12001-GP-000-00","description":"Sub-Contractor Cost - Preliminaries","project":"RE/28Q01"},{"wbs":"RE/28Q01-12001-CW-000-00","description":"Sub-Contractor Cost - Works","project":"RE/28Q01"},{"wbs":"RE/28Q01-12080-IN-000-00","description":"GNEC Self Performed - Internal Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-12080-EX-000-00","description":"GNEC Self Performed - External Plant","project":"RE/28Q01"},{"wbs":"RE/28Q01-12080-MC-000-00","description":"GNEC Self Performed - Material Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-12080-MH-000-00","description":"GNEC - Material Handling Cost","project":"RE/28Q01"},{"wbs":"RE/28Q01-12080-OH-000-00","description":"GNEC Self Performed - Overhead","project":"RE/28Q01"},{"wbs":"RE/28Q01-12099-00-000-00","description":"(URW) for Water Works - Others","project":"RE/28Q01"}];
+let master=JSON.parse(localStorage.getItem("wbs_master_v7")||"null");
+if(!Array.isArray(master)||!master.length) master=EMBEDDED_MASTER;
+
+const video=document.getElementById("video");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d",{willReadFrequently:true});
+const statusEl=document.getElementById("status");
+const overlay=document.getElementById("overlay");
+const result=document.getElementById("result");
+const startBtn=document.getElementById("start");
+const ocrBtn=document.getElementById("ocr");
+
+let stream=null,worker=null,running=false,busy=false,mode="fast";
+let lastWbs="",lastStamp=0;
+
+const MAP=new Map(master.map(r=>[canonical(r.wbs),r]));
+const WBS_RE=/^RE\/28Q01-\d{5}-\d{2}-\d{3}-\d{2}$/;
+
+function clean(s){
+  return String(s||"").toUpperCase()
+    .replace(/[—–−]/g,"-")
+    .replace(/\s+/g,"")
+    .replace(/[^A-Z0-9./_-]/g,"");
+}
+
+/* Only conservative OCR substitutions. We do NOT freely change characters. */
+function canonical(s){
+  return clean(s)
+    .replace(/O/g,"0")
+    .replace(/Q/g,"0")
+    .replace(/[IL|]/g,"1");
+}
+
+function editDistance(a,b){
+  const m=a.length,n=b.length;
+  if(Math.abs(m-n)>4)return 99;
+  let prev=Array.from({length:n+1},(_,i)=>i);
+  for(let i=1;i<=m;i++){
+    const cur=[i];
+    for(let j=1;j<=n;j++)
+      cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur;
+  }
+  return prev[n];
+}
+
+function similarity(a,b){
+  a=canonical(a); b=canonical(b);
+  const d=editDistance(a,b);
+  return d>8?0:1-d/Math.max(a.length,b.length);
+}
+
+/* Extract a WBS-shaped candidate from one OCR token or adjacent tokens. */
+function candidates(words){
+  const out=[];
+  const add=(text,box)=>{
+    const t=clean(text);
+    if(t.length>=16) out.push({text:t,bbox:box});
+  };
+
+  for(const w of words) add(w.text,w.bbox);
+
+  for(let i=0;i<words.length;i++){
+    let joined="";
+    let box=null;
+    for(let j=i;j<Math.min(i+6,words.length);j++){
+      joined+=clean(words[j].text);
+      box={
+        x0:box?Math.min(box.x0,words[j].bbox.x0):words[j].bbox.x0,
+        y0:box?Math.min(box.y0,words[j].bbox.y0):words[j].bbox.y0,
+        x1:box?Math.max(box.x1,words[j].bbox.x1):words[j].bbox.x1,
+        y1:box?Math.max(box.y1,words[j].bbox.y1):words[j].bbox.y1
+      };
+      if(joined.length>=16) add(joined,box);
+    }
+  }
+  return out;
+}
+
+function exactFind(words){
+  for(const c of candidates(words)){
+    const r=MAP.get(canonical(c.text));
+    if(r)return {row:r,candidate:c,confidence:1,exact:true};
+  }
+  return null;
+}
+
+function closestFind(words){
+  let best=null;
+  for(const c of candidates(words)){
+    const x=canonical(c.text);
+    if(x.length<20||x.length>28)continue;
+    for(const r of master){
+      const target=canonical(r.wbs);
+      if(Math.abs(x.length-target.length)>2)continue;
+      const s=similarity(x,target);
+      if(!best||s>best.confidence) best={row:r,candidate:c,confidence:s,exact:false};
+    }
+  }
+  return best&&best.confidence>=0.90?best:null;
+}
+
+function render(hit){
+  if(!hit){
+    result.innerHTML='<div class="wbs">🔴 WBS NOT CONFIRMED</div><div class="desc">Keep the Level 5 WBS inside the scan line.</div>';
+    overlay.style.display="none";
+    return;
+  }
+
+  if(hit.exact){
+    result.innerHTML=`<div class="wbs valid">🟢 ${esc(hit.row.wbs)} ✓</div>
+      <div class="desc">${esc(hit.row.description)}${hit.row.project?" • "+esc(hit.row.project):""}</div>
+      <div class="small">Exact Level 5 match • Confidence 100% against Master</div>`;
+  }else{
+    result.innerHTML=`<div class="wbs warn">🟡 ${esc(hit.row.wbs)}</div>
+      <div class="desc">${esc(hit.row.description)}</div>
+      <div class="small">Possible OCR error • Similarity ${(hit.confidence*100).toFixed(1)}% • Verify before SAP posting</div>`;
+  }
+}
+
+function esc(s){
+  return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+}
+
+async function setupWorker(){
+  worker=await Tesseract.createWorker("eng",1,{logger:m=>{
+    if(m.status==="recognizing text") statusEl.textContent="Scanning…";
+  }});
+  await worker.setParameters({
+    tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./_-",
+    preserve_interword_spaces:"1",
+    user_defined_dpi:"250"
+  });
+}
+
+async function recognizePass(image,psm){
+  await worker.setParameters({tessedit_pageseg_mode:String(psm)});
+  return await worker.recognize(image);
+}
+
+function prepare(source,variant){
+  const w=source.width,h=source.height;
+  const c=document.createElement("canvas");
+  c.width=w*2;c.height=h*2;
+  const x=c.getContext("2d",{willReadFrequently:true});
+  x.drawImage(source,0,0,c.width,c.height);
+
+  if(variant===0){
+    x.filter="grayscale(1) contrast(1.45) brightness(1.06)";
+  }else if(variant===1){
+    x.filter="grayscale(1) contrast(1.75) brightness(1.12)";
+  }else{
+    x.filter="grayscale(1) contrast(2.0) brightness(1.0)";
+  }
+  x.drawImage(c,0,0);
+  x.filter="none";
+  return c;
+}
+
+async function scanLoop(){
+  if(!running||busy)return;
+  busy=true;
+
+  try{
+    const vw=video.videoWidth,vh=video.videoHeight;
+    if(!vw||!vh){busy=false;setTimeout(scanLoop,180);return;}
+
+    /* Very narrow scan band: only the WBS line. */
+    const sx=Math.round(vw*.04);
+    const sy=Math.round(vh*.39);
+    const sw=Math.round(vw*.92);
+    const sh=Math.round(vh*.12);
+
+    canvas.width=Math.round(sw*1.6);
+    canvas.height=Math.round(sh*1.6);
+    ctx.drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+
+    let hit=null;
+
+    // Pass 1: fast, single high-quality image.
+    const p0=prepare(canvas,0);
+    let r=await recognizePass(p0,7);
+    hit=exactFind(r.data.words||[]);
+
+    // Pass 2/3 only when needed. This is the accuracy layer.
+    if(!hit&&mode==="accurate"){
+      const p1=prepare(canvas,1);
+      r=await recognizePass(p1,7);
+      hit=exactFind(r.data.words||[]);
+      if(!hit){
+        const p2=prepare(canvas,2);
+        r=await recognizePass(p2,6);
+        hit=exactFind(r.data.words||[]);
+      }
+    }
+
+    // High-confidence Master matching after exact attempts.
+    if(!hit){
+      hit=closestFind(r.data.words||[]);
+    }
+
+    render(hit);
+
+    if(hit){
+      const b=hit.candidate.bbox;
+      const x=sx+(b.x0+b.x1)/2/1.6;
+      const y=sy+(b.y0+b.y1)/2/1.6;
+      overlay.textContent=hit.row.wbs;
+      overlay.style.left=(x/vw*100)+"%";
+      overlay.style.top=(y/vh*100)+"%";
+      overlay.style.display="block";
+
+      const msg=hit.exact?"🟢 VALID: ":"🟡 VERIFY: ";
+      if(hit.row.wbs!==lastWbs||Date.now()-lastStamp>1600){
+        statusEl.textContent=msg+hit.row.wbs;
+        lastWbs=hit.row.wbs;lastStamp=Date.now();
+      }
+    }else{
+      overlay.style.display="none";
+      statusEl.textContent="Scanning WBS…";
+    }
+  }catch(e){
+    console.log(e);
+    statusEl.textContent="OCR retry…";
+  }
+
+  busy=false;
+  if(running)setTimeout(scanLoop,mode==="fast"?180:120);
+}
+
+startBtn.onclick=async()=>{
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},
+      audio:false
+    });
+    video.srcObject=stream;
+    await video.play();
+    ocrBtn.disabled=false;
+    startBtn.textContent="Camera Ready";
+    statusEl.textContent=`${master.length} Level 5 WBS`;
+  }catch(e){
+    statusEl.textContent="Camera error: "+e.message;
+  }
+};
+
+ocrBtn.onclick=async()=>{
+  if(running){
+    running=false;
+    ocrBtn.textContent="Start OCR";
+    statusEl.textContent="OCR stopped";
+    overlay.style.display="none";
+    return;
+  }
+  running=true;
+  ocrBtn.disabled=true;
+  statusEl.textContent="Loading OCR…";
+  try{
+    if(!worker) await setupWorker();
+    ocrBtn.disabled=false;
+    ocrBtn.textContent="Stop OCR";
+    scanLoop();
+  }catch(e){
+    running=false;ocrBtn.disabled=false;
+    statusEl.textContent="OCR error: "+e.message;
+  }
+};
+
+document.getElementById("masterBtn").onclick=()=>{
+  const p=document.getElementById("panel");
+  p.style.display=p.style.display==="none"?"block":"none";
+  renderMaster();
+};
+
+document.getElementById("fast").onclick=()=>{
+  mode="fast";
+  document.getElementById("fast").classList.add("selected");
+  document.getElementById("accurate").classList.remove("selected");
+};
+document.getElementById("accurate").onclick=()=>{
+  mode="accurate";
+  document.getElementById("accurate").classList.add("selected");
+  document.getElementById("fast").classList.remove("selected");
+};
+
+document.getElementById("file").onchange=async e=>{
+  const file=e.target.files[0];
+  if(!file)return;
+  const buf=await file.arrayBuffer();
+  let rows=[];
+  if(file.name.toLowerCase().endsWith(".csv")){
+    rows=new TextDecoder().decode(buf).split(/\r?\n/).map(x=>x.split(","));
+  }else{
+    const wb=XLSX.read(buf,{type:"array"});
+    rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
+  }
+  importRows(rows);
+};
+
+function importRows(rows){
+  if(!rows.length)return;
+  const h=rows[0].map(x=>String(x).toLowerCase());
+  const li=h.findIndex(x=>x==="level");
+  const wi=h.findIndex(x=>x.includes("wbs code"));
+  const di=h.findIndex(x=>x.includes("short description"));
+  const pi=h.findIndex(x=>x==="project definition");
+  const out=[];
+  for(let i=1;i<rows.length;i++){
+    const level=li>=0?String(rows[i][li]).trim():"5";
+    const wbs=String(rows[i][wi>=0?wi:0]||"").trim();
+    if(level==="5"&&wbs) out.push({
+      wbs,
+      description:di>=0?String(rows[i][di]||"").trim():"",
+      project:pi>=0?String(rows[i][pi]||"").trim():""
+    });
+  }
+  if(!out.length){alert("No Level 5 WBS found.");return;}
+  master=out;
+  localStorage.setItem("wbs_master_v7",JSON.stringify(master));
+  location.reload();
+}
+
+function renderMaster(){
+  document.getElementById("count").textContent=`${master.length} Level 5 WBS loaded`;
+  const p=document.getElementById("preview");p.innerHTML="";
+  const t=document.createElement("table");
+  t.innerHTML="<tr><th>WBS Level 5</th><th>Description</th></tr>";
+  master.slice(0,12).forEach(r=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(r.wbs)}</td><td>${esc(r.description)}</td>`;
+    t.appendChild(tr);
+  });
+  p.appendChild(t);
+}
+renderMaster();
+statusEl.textContent=`${master.length} Level 5 WBS`;
+</script>
+</body>
+</html>
